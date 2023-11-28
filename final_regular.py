@@ -11,10 +11,13 @@ import math
 import csv
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LinearRegression
-from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.metrics import mean_squared_error, r2_score, make_scorer
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.model_selection import cross_val_score
+from functools import partial
+
 
 
 # function returns a dict of taipei rain data. {"20231121": 0.0, ... }
@@ -43,9 +46,6 @@ def read_rain_data(json_file_path):
 
 # return list of holiday dates, input format: "2023-10-01"
 def holiday(start_date, end_date):
-    # Define the start and end dates (October to November)
-    start_date = "2023-10-01"
-    end_date = "2023-12-30"
 
     # Generate a date range
     date_range = pd.date_range(start=start_date, end=end_date)
@@ -72,6 +72,9 @@ def what_day(date_string):
 
     return day_of_week
 
+
+
+
 def main():
 
     # jsh_mode on of off
@@ -90,11 +93,14 @@ def main():
     holidays_list = holiday("2023-10-01", "2023-12-30")
     # print(holidays_list)
 
+    # record the cv_score
+    cv_score_list = []
+
 
     # loop over each station in sno_test_set.txt, train a model for each station
     outputlist = []
     for station in test_stations_list:
-        # x format final: stationID, date, time(min 0-1440), tot, act, rain, holiday, weekday (but don't train with date)
+        # x format final: stationID, date, time(min 0-1440), tot, act, rain, holiday, weekday (but don't train with date, tot)
         x_train = []
         y_train = []
 
@@ -125,13 +131,12 @@ def main():
             # add weekday 0~6
             x.append( what_day(date_str) )
             
-        # print(x_train)
 
         
         
         # delete x_train of 10/25 to 10/28 if jsh_mode is on
         if jsh_mode == 1:
-            jsh_test_date = [ 20231025, 20231026, 20231017, 20231028 ]
+            jsh_test_date = [ 20231025, 20231026, 20231027, 20231028 ]
             # Use a list comprehension to filter out elements based on the condition
             filtered_indices = [i for i, x in enumerate(x_train) if x[0] not in jsh_test_date]
 
@@ -140,20 +145,32 @@ def main():
             y_train = [y_train[i] for i in filtered_indices]
         
         
-        
+
 
         # Choose a model and train
-        model = RandomForestRegressor(n_estimators=100, random_state=42, verbose=1)
+        model = RandomForestRegressor(n_estimators=250, random_state=42, n_jobs=10)
         # model = LinearRegression()
-        x_train_input = [x[:1] + x[2:] for x in x_train]
+        # dont train with date, tot
+        x_train_input = [x[:1] + x[2:3] + x[4:] for x in x_train]
         # print(x_train_input)
-        model.fit(x_train_input, y_train)
+        model.fit(x_train_input, y_train )
 
+        # crosss validation
+        tot = x_train[0][3]
+        def error_funct(y_true, y_predict, s=tot):
+            y_true = np.array(y_true)
+            y_predict = np.array(y_predict)
+            return np.mean( 3 * ( np.abs(y_predict-y_true)/s ) * ( np.abs(y_true/s-1/3) + np.abs(y_true/s-2/3) ) )
+        scorer = make_scorer(error_funct, greater_is_better=False)
+        cv_score = cross_val_score(model, x_train_input, y_train, scoring=scorer )
+        cv_score_list.append(cv_score)
+        print(station ,-cv_score)
+
+        continue
         
 
         # create x_test for public test: From 10/21/2023 00:00 to 10/24/2023 23:40. (i.e. 00:00, 00:20, 00:40, … 23:00, 23:20, 23:40)
         x_test_public = []
-        tot = x_train[0][2]
         # print(tot)
         for date in range(20231021, 20231025):
             for time in range(1, 1440, 20):
@@ -225,16 +242,17 @@ def main():
                 x.append( what_day(date_str) )
 
         
-        # Make predictions on the test set, don't train with date
-        x_test_public_input = [x[:1] + x[2:] for x in x_test_public]
+        # Make predictions on the test set, don't train with date, tot
+        x_test_public_input = [x[:1] + x[2:3] + x[4:]  for x in x_test_public]
         predictions_public = model.predict(x_test_public_input)
 
-        x_test_private1_input = [x[:1] + x[2:] for x in x_test_private1]
+        x_test_private1_input = [x[:1] + x[2:3] + x[4:]  for x in x_test_private1]
         predictions_private1 = model.predict(x_test_private1_input)
 
         if jsh_mode == 1:
-            x_test_jsh_input = [x[:1] + x[2:] for x in x_test_jsh]
+            x_test_jsh_input = [x[:1] + x[2:3] + x[4:] for x in x_test_jsh]
             predictions_jsh = model.predict(x_test_jsh_input)
+        # print(x_test_public_input)
         
 
         # save the predictions of public to submission file
@@ -281,13 +299,15 @@ def main():
                 outputlist.append( [id, sbi] )
 
         
+    # # output the results to a submission file
+    # output_file = '/Users/web/Library/CloudStorage/Dropbox/NTU_course/Senior1/ML_HT/code/final_regular/submission_web.csv'
+    # # Save the list of lists to a text file with each list on a new line
+    # column_names = ['id', 'sbi']
+    # np.savetxt(output_file, outputlist, fmt='%s, %s', delimiter=',', header=','.join(column_names), comments='', newline='\n') 
 
-        # print( outputlist )
+    print(- np.mean( np.array(cv_score_list) ))
 
-    output_file = '/Users/web/Library/CloudStorage/Dropbox/NTU_course/Senior1/ML_HT/code/final_regular/submission_web.csv'
-    # Save the list of lists to a text file with each list on a new line
-    column_names = ['id', 'sbi']
-    np.savetxt(output_file, outputlist, fmt='%s, %s', delimiter=',', header=','.join(column_names), comments='', newline='\n') 
+
 
 
 
