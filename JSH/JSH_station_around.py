@@ -74,7 +74,7 @@ for target in target_station:
     target_longitude = demographic[target]["lng"]
 
     # 指定距離閾值（公尺）
-    distance_threshold = 50  #  公尺
+    distance_threshold = 5  #  公尺
 
     # 找出在指定距離內的點
     nearby_points = find_points_within_distance(target_latitude, target_longitude, points, distance_threshold, station_numbers)

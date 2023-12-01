@@ -148,15 +148,16 @@ def main():
 
 
         # Choose a model and train
-        model = RandomForestRegressor(n_estimators=250, random_state=42, n_jobs=10)
+        model = RandomForestRegressor(n_estimators=250, random_state=1126, n_jobs=10, verbose=0)
         # model = LinearRegression()
         # dont train with date, tot
-        x_train_input = [x[:1] + x[2:3] + x[4:] for x in x_train]
+        x_train_input = [ x[2:3] + x[4:] for x in x_train ]
         # print(x_train_input)
         model.fit(x_train_input, y_train )
 
-        # crosss validation
         tot = x_train[0][3]
+
+        # crosss validation
         def error_funct(y_true, y_predict, s=tot):
             y_true = np.array(y_true)
             y_predict = np.array(y_predict)
@@ -243,14 +244,14 @@ def main():
 
         
         # Make predictions on the test set, don't train with date, tot
-        x_test_public_input = [x[:1] + x[2:3] + x[4:]  for x in x_test_public]
+        x_test_public_input = [ x[2:3] + x[4:]  for x in x_test_public]
         predictions_public = model.predict(x_test_public_input)
 
-        x_test_private1_input = [x[:1] + x[2:3] + x[4:]  for x in x_test_private1]
+        x_test_private1_input = [ x[2:3] + x[4:]  for x in x_test_private1]
         predictions_private1 = model.predict(x_test_private1_input)
 
         if jsh_mode == 1:
-            x_test_jsh_input = [x[:1] + x[2:3] + x[4:] for x in x_test_jsh]
+            x_test_jsh_input = [ x[2:3] + x[4:] for x in x_test_jsh]
             predictions_jsh = model.predict(x_test_jsh_input)
         # print(x_test_public_input)
         
@@ -305,7 +306,7 @@ def main():
     # column_names = ['id', 'sbi']
     # np.savetxt(output_file, outputlist, fmt='%s, %s', delimiter=',', header=','.join(column_names), comments='', newline='\n') 
 
-    print(- np.mean( np.array(cv_score_list) ))
+    # print(- np.mean( np.array(cv_score_list) ))
 
 
 
